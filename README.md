@@ -27,8 +27,6 @@ automatically fires an alert.
 
 ## Architecture
 
-### Sequence Diagram
-
 ```mermaid
 sequenceDiagram
     autonumber
@@ -37,7 +35,7 @@ sequenceDiagram
     participant DB as 🗄️ PostgreSQL
     participant W  as 🐕 Watchdog Worker
 
-    rect rgb(200, 230, 255)
+    rect rgb(59, 130, 246)
         Note over D,DB: ① Monitor Registration
         D->>A: POST /monitors {"id","timeout","alert_email"}
         A->>DB: UPSERT monitors (status=active, expires_at=NOW+timeout)
@@ -45,7 +43,7 @@ sequenceDiagram
         A-->>D: 201 Created
     end
 
-    rect rgb(200, 255, 200)
+    rect rgb(34, 197, 94)
         Note over D,DB: ② Heartbeat — Happy Path
         D->>A: POST /monitors/:id/heartbeat
         A->>DB: SELECT monitor WHERE id=:id
@@ -55,7 +53,7 @@ sequenceDiagram
         A-->>D: 200 OK
     end
 
-    rect rgb(255, 200, 200)
+    rect rgb(239, 68, 68)
         Note over W,DB: ③ Alert — Device Goes Silent
         loop Every 5 seconds
             W->>DB: UPDATE monitors SET status='down'<br/>WHERE status='active' AND expires_at <= NOW()
@@ -65,7 +63,7 @@ sequenceDiagram
         end
     end
 
-    rect rgb(255, 255, 200)
+    rect rgb(234, 179, 8)
         Note over D,DB: ④ Pause / Resume
         D->>A: POST /monitors/:id/pause
         A->>DB: UPDATE status=paused, expires_at=NULL
@@ -79,32 +77,15 @@ sequenceDiagram
     end
 ```
 
-### State Diagram
-
-```mermaid
-stateDiagram-v2
-    direction LR
-
-    [*]    --> active : POST /monitors (register)
-
-    active --> active : POST /monitors/:id/heartbeat (timer reset)
-    active --> paused : POST /monitors/:id/pause (timer suspended)
-    active --> down   : ⏰ Watchdog fires (timer expired)
-
-    paused --> active : POST /monitors/:id/heartbeat (un-pause + reset)
-
-    down   --> active : POST /monitors (re-register)
-```
-
 ---
 
 ## API Endpoints
 
-| Method | Path | User Story | Description |
-|--------|------|---|---|
-| `POST` | `/monitors` | 1 | Register a new monitor |
-| `GET` | `/monitors` | 1 | List all monitors |
-| `GET` | `/monitors/:id` | 1 | Get a monitor's current status |
-| `POST` | `/monitors/:id/heartbeat` | 2 | Send a heartbeat — reset the timer |
-| `POST` | `/monitors/:id/pause` | Bonus | Pause the monitor |
-| `GET` | `/monitors/:id/history` | Dev Choice | Full event audit log |
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/monitors` | Register a new monitor |
+| `GET` | `/monitors` | List all monitors |
+| `GET` | `/monitors/:id` | Get a monitor's current status |
+| `POST` | `/monitors/:id/heartbeat` | Send a heartbeat — resets the timer |
+| `POST` | `/monitors/:id/pause` | Pause the monitor (no alerts while paused) |
+| `GET` | `/monitors/:id/history` | Full event audit log |
