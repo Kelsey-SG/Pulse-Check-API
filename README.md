@@ -59,7 +59,49 @@ sequenceDiagram
     Worker->>DB: Update status to down
     Worker->>Alert: console.error ALERT JSON
 ```
+```mermaid
+sequenceDiagram
+    participant D  as Remote Device
+    participant A  as API (Express)
+    participant S  as In-Memory Store
+    participant W  as Watchdog Worker
 
+    Note over D,S: Monitor Registration
+    D->>A: POST /monitors {"id","timeout","alert_email"}
+    A->>S: store.setMonitor(monitor)
+    A->>S: store.logEvent(created)
+    A-->>D: 201 Created
+
+    Note over D,S: Heartbeat
+    D->>A: POST /monitors/:id/heartbeat
+    A->>S: store.getMonitor(id)
+    S-->>A: {status: "active"}
+    A->>S: update expires_at = NOW + timeout
+    A->>S: store.logEvent(heartbeat)
+    A-->>D: 200 OK
+    
+
+    Note over W,S: ③ Alert — Device Goes Silent
+    loop Every 5 seconds
+        W->>S: getAllMonitors()
+        S-->>W: active monitors where expires_at <= NOW
+        W->>S: monitor.status = 'down'
+        W->>S: store.logEvent(alert_fired)
+        W->>W: console.error ALERT JSON
+    end
+    
+
+    Note over D,S: ④ Pause / Resume
+    D->>A: POST /monitors/:id/pause
+    A->>S: status=paused, expires_at=null
+    A->>S: store.logEvent(paused)
+    A-->>D: 200 OK
+
+    D->>A: POST /monitors/:id/heartbeat
+    A->>S: status=active, expires_at=NOW+timeout
+    A->>S: store.logEvent(unpaused)
+    A-->>D: 200 OK
+```
 ---
 
 ## API Endpoints
