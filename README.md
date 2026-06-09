@@ -27,54 +27,39 @@ automatically fires an alert.
 
 ## Architecture
 
+## Architecture
+
 ```mermaid
 sequenceDiagram
-    autonumber
-    participant D  as 📡 Remote Device
-    participant A  as ⚡ API (Express)
-    participant DB as 🗄️ PostgreSQL
-    participant W  as 🐕 Watchdog Worker
+    participant Device as Remote Device
+    participant API as Pulse-Check API
+    participant DB as PostgreSQL
+    participant Worker as Watchdog Worker
+    participant Alert as Alert Logger
 
-    rect rgb(59, 130, 246)
-        Note over D,DB: ① Monitor Registration
-        D->>A: POST /monitors {"id","timeout","alert_email"}
-        A->>DB: UPSERT monitors (status=active, expires_at=NOW+timeout)
-        A->>DB: INSERT monitor_events (type=created)
-        A-->>D: 201 Created
-    end
+    Note over Device, API: Registration
+    Device->>API: POST /monitors (id, timeout, alert_email)
+    API->>DB: Save monitor (status: active, expires_at)
+    API-->>Device: 201 Created
 
-    rect rgb(34, 197, 94)
-        Note over D,DB: ② Heartbeat — Happy Path
-        D->>A: POST /monitors/:id/heartbeat
-        A->>DB: SELECT monitor WHERE id=:id
-        DB-->>A: {status: "active"}
-        A->>DB: UPDATE expires_at = NOW + timeout
-        A->>DB: INSERT monitor_events (type=heartbeat)
-        A-->>D: 200 OK
-    end
+    Note over Device, API: Heartbeat
+    Device->>API: POST /monitors/:id/heartbeat
+    API->>DB: Reset expires_at, status: active
+    API-->>Device: 200 OK
 
-    rect rgb(239, 68, 68)
-        Note over W,DB: ③ Alert — Device Goes Silent
-        loop Every 5 seconds
-            W->>DB: UPDATE monitors SET status='down'<br/>WHERE status='active' AND expires_at <= NOW()
-            DB-->>W: [{id: "device-123", alert_email: "..."}]
-            W->>DB: INSERT monitor_events (type=alert_fired)
-            W->>W: console.error 🚨 ALERT JSON
-        end
-    end
+    Note over Device, API: Pause / Resume
+    Device->>API: POST /monitors/:id/pause
+    API->>DB: Clear expires_at, status: paused
+    API-->>Device: 200 OK
+    Device->>API: POST /monitors/:id/heartbeat
+    API->>DB: Reset expires_at, status: active
+    API-->>Device: 200 OK
 
-    rect rgb(234, 179, 8)
-        Note over D,DB: ④ Pause / Resume
-        D->>A: POST /monitors/:id/pause
-        A->>DB: UPDATE status=paused, expires_at=NULL
-        A->>DB: INSERT monitor_events (type=paused)
-        A-->>D: 200 OK
-
-        D->>A: POST /monitors/:id/heartbeat
-        A->>DB: UPDATE status=active, expires_at=NOW+timeout
-        A->>DB: INSERT monitor_events (type=unpaused)
-        A-->>D: 200 OK
-    end
+    Note over Worker, Alert: Failure Detection
+    Worker->>DB: Find active monitors where expires_at <= NOW()
+    DB-->>Worker: List of timed-out devices
+    Worker->>DB: Update status to down
+    Worker->>Alert: console.error ALERT JSON
 ```
 
 ---
