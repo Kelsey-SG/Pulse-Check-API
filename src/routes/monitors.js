@@ -7,7 +7,6 @@ const router  = express.Router();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Implementation of POST /monitors features:
-
 router.post('/', (req, res) => {
     const { id, timeout, alert_email } = req.body;
   
@@ -44,10 +43,10 @@ router.post('/', (req, res) => {
     });
   });
   
-// Implementation of POST /monitors/:id/heartbeat features:
 
+  // Implementation of POST /monitors/:id/heartbeat features:
 router.post('/:id/heartbeat', (req, res) => {
-    const { id } = req.params;
+    const {id} = req.params;
     const monitor = store.getMonitor(id);
   
     if (!monitor)
@@ -68,6 +67,30 @@ router.post('/:id/heartbeat', (req, res) => {
     return res.json({
       message: paused ? `Monitor '${id}' un-paused. Timer restarted.` 
       : `Heartbeat received. Timer reset for '${id}'.`, monitor,
+    });
+  });
+
+  
+// Implementation of POST /monitors/:id/pause features:
+router.post('/:id/pause', (req, res) => {
+    const {id} = req.params;
+    const monitor = store.getMonitor(id);
+  
+    if (!monitor)
+      return res.status(404).json({ error: `Monitor '${id}' not found.` });
+    if (monitor.status === 'paused')
+      return res.status(409).json({ error: `Monitor '${id}' is already paused.` });
+    if (monitor.status === 'down')
+      return res.status(409).json({ error: `Monitor '${id}' is DOWN. Re-register to restart.` });
+  
+    monitor.status = 'paused';
+    monitor.expires_at = null;
+    store.setMonitor(monitor);
+    store.logEvent(id, 'paused', { paused_at: new Date().toISOString() });
+  
+    return res.json({
+      message: `Monitor '${id}' paused. No alerts will fire. Send a heartbeat to resume.`,
+      monitor,
     });
   });
 
