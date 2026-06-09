@@ -35,4 +35,4 @@ function startWatchdog(intervalMs = 5_000) {
   return setInterval(checkExpiredMonitors, intervalMs);
 }
 
-module.exports = { startWatchdog };
+module.exports = {startWatchdog};

@@ -40,10 +40,10 @@ function logEvent(monitorId, eventType, details = {}) {
   });
 }
 
-function getEvents(monitorId, { limit = 100, eventType = null } = {}) {
+function getEvents(monitorId, {limit = 100, eventType = null} = {}) {
   return events
     .filter(e => e.monitor_id === monitorId && (!eventType || e.event_type === eventType))
     .slice(-limit);
 }
 
-module.exports = { getMonitor, getAllMonitors, setMonitor, logEvent, getEvents };
+module.exports = {getMonitor, getAllMonitors, setMonitor, logEvent, getEvents};

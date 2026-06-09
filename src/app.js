@@ -4,7 +4,7 @@ require('dotenv').config();
 
 const express = require('express');
 const monitorsRouter = require('./routes/monitors');
-const { startWatchdog } = require('./workers/watchdog');
+const {startWatchdog} = require('./workers/watchdog');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
