@@ -1,135 +1,110 @@
-# Pulse-Check-API ("Watchdog" Sentinel)
-This challenge is designed to test your ability to bridge Computer Science fundamentals with Modern Backend Engineering.
+# 🐕 Pulse-Check API — "Watchdog" Sentinel
 
-## 1. Business Context
-> **Client:** *CritMon Servers Inc.* (A Critical Infrastructure Monitoring Company).
-
-### The Problem
-CritMon provides monitoring for remote solar farms and unmanned weather stations in areas with poor connectivity. These devices are supposed to send "I'm alive" signals every hour.
-
-Currently, CritMon has no way of knowing if a device has gone offline (due to power failure or theft) until a human manually checks the logs. They need a system that alerts *them* when a device *stops* talking.
-
-### The Solution
-You need to build a **Dead Man’s Switch API**. Devices will register a "monitor" with a countdown timer (e.g., 60 seconds). If the device fails to "ping" (send a heartbeat) to the API before the timer runs out, the system automatically triggers an alert.
+> A Dead Man's Switch API for monitoring remote IoT devices at **CritMon Servers Inc.**
 
 ---
 
-## 2. Technical Objective
-Build a backend service that manages stateful timers.
+## The Problem
 
-* **Registration:** Allow a client to create a monitor with a specific timeout duration.
-* **Heartbeat:** Reset the countdown when a ping is received.
-* **Trigger:** Fire a webhook (or log a critical error) if the countdown reaches zero.
+CritMon monitors remote solar farms and unmanned weather stations in areas with
+poor connectivity. Devices send "I'm alive" signals every hour, but there was no
+automated way to detect when a device went silent.
 
-
----
-
-## 3. Getting Started
-
-1.  **Fork this Repository:** Do not clone it directly. Create a fork to your own GitHub account.
-2.  **Environment:** You may use **Node.js, Python, Java or Go, etc.**.
-3.  **Submission:** Your final submission will be a link to your forked repository containing:
-    * The source code.
-    * The **Architecture Diagram**
-    * The `README.md` with documentation.
+**Pulse-Check API** solves this: a device registers a monitor with a countdown
+timer. If it fails to send a heartbeat before the timer expires, the Watchdog
+automatically fires an alert.
 
 ---
 
-## 4. The Architecture Diagram 
-**Task:** Before you write any code, you must design the logic flow.
-**Deliverable:** A **Sequence Diagram** or **State Flowchart** embedded in your `README.md`.
+## Tech Stack
+
+- **Runtime:** Node.js
+- **Framework:** Express.js
+- **Database:** PostgreSQL (`pg`)
+- **Background Worker:** Native `setInterval`
 
 ---
 
-## 5. User Stories & Acceptance Criteria
+## Architecture
 
-### User Story 1: Registering a Monitor
-**As a** device administrator,  
-**I want to** create a new monitor for my device,  
-**So that** the system knows to track its status.
+### Sequence Diagram
 
-**Acceptance Criteria:**
-- [ ] The API accepts a `POST /monitors` request.
-- [ ] Input: `{"id": "device-123", "timeout": 60, "alert_email": "admin@critmon.com"}`.
-- [ ] The system starts a countdown timer for 60 seconds associated with `device-123`.
-- [ ] Response: `201 Created` with a confirmation message.
+```mermaid
+sequenceDiagram
+    autonumber
+    participant D  as 📡 Remote Device
+    participant A  as ⚡ API (Express)
+    participant DB as 🗄️ PostgreSQL
+    participant W  as 🐕 Watchdog Worker
 
-### User Story 2: The Heartbeat (Reset)
-**As a** remote device,  
-**I want to** send a signal to the server,  
-**So that** my timer is reset and no alert is sent.
+    rect rgb(200, 230, 255)
+        Note over D,DB: ① Monitor Registration
+        D->>A: POST /monitors {"id","timeout","alert_email"}
+        A->>DB: UPSERT monitors (status=active, expires_at=NOW+timeout)
+        A->>DB: INSERT monitor_events (type=created)
+        A-->>D: 201 Created
+    end
 
-**Acceptance Criteria:**
-- [ ] The API accepts a `POST /monitors/{id}/heartbeat` request.
-- [ ] If the ID exists and the timer has NOT expired:
-    - [ ] Restart the countdown from the beginning (e.g., reset to 60 seconds).
-    - [ ] Return `200 OK`.
-- [ ] If the ID does not exist:
-    - [ ] Return `404 Not Found`.
+    rect rgb(200, 255, 200)
+        Note over D,DB: ② Heartbeat — Happy Path
+        D->>A: POST /monitors/:id/heartbeat
+        A->>DB: SELECT monitor WHERE id=:id
+        DB-->>A: {status: "active"}
+        A->>DB: UPDATE expires_at = NOW + timeout
+        A->>DB: INSERT monitor_events (type=heartbeat)
+        A-->>D: 200 OK
+    end
 
-### User Story 3: The Alert (Failure State)
-**As a** support engineer,  
-**I want to** be notified immediately if a device stops sending heartbeats,  
-**So that** I can deploy a repair team.
+    rect rgb(255, 200, 200)
+        Note over W,DB: ③ Alert — Device Goes Silent
+        loop Every 5 seconds
+            W->>DB: UPDATE monitors SET status='down'<br/>WHERE status='active' AND expires_at <= NOW()
+            DB-->>W: [{id: "device-123", alert_email: "..."}]
+            W->>DB: INSERT monitor_events (type=alert_fired)
+            W->>W: console.error 🚨 ALERT JSON
+        end
+    end
 
-**Acceptance Criteria:**
-- [ ] If the timer for `device-123` reaches 0 seconds (no heartbeat received):
-    - [ ] The system must internally "fire" an alert.
-    - [ ] **Implementation:** For this project, simply `console.log` a JSON object: `{"ALERT": "Device device-123 is down!", "time": <timestamp>}`. (Or simulate sending an email).
-    - [ ] The monitor status changes to `down`.
+    rect rgb(255, 255, 200)
+        Note over D,DB: ④ Pause / Resume
+        D->>A: POST /monitors/:id/pause
+        A->>DB: UPDATE status=paused, expires_at=NULL
+        A->>DB: INSERT monitor_events (type=paused)
+        A-->>D: 200 OK
 
----
+        D->>A: POST /monitors/:id/heartbeat
+        A->>DB: UPDATE status=active, expires_at=NOW+timeout
+        A->>DB: INSERT monitor_events (type=unpaused)
+        A-->>D: 200 OK
+    end
+```
 
-## 6. Bonus User Story (The "Snooze" Button)
-**As a** maintenance technician,  
-**I want to** pause monitoring while I am repairing a device,  
-**So that** I don't trigger false alarms.
+### State Diagram
 
-**Acceptance Criteria:**
-- [ ] Create a `POST /monitors/{id}/pause` endpoint.
-- [ ] When called, the timer stops completely. No alerts will fire.
-- [ ] Calling the heartbeat endpoint again automatically "un-pauses" the monitor and restarts the timer.
+```mermaid
+stateDiagram-v2
+    direction LR
 
----
+    [*]    --> active : POST /monitors (register)
 
-## 7. The "Developer's Choice" Challenge
-We value engineers who look for "what's missing."
+    active --> active : POST /monitors/:id/heartbeat (timer reset)
+    active --> paused : POST /monitors/:id/pause (timer suspended)
+    active --> down   : ⏰ Watchdog fires (timer expired)
 
-**Task:** Identify **one** additional feature that makes this system more robust or user-friendly.
-1.  **Implement it.**
-2.  **Document it:** Explain *why* you added it in your README.
+    paused --> active : POST /monitors/:id/heartbeat (un-pause + reset)
 
----
-
-## 8. Documentation Requirements
-Your final `README.md` must replace these instructions. It must cover:
-
-1.  **Architecture Diagram** 
-2.  **Setup Instructions** 
-3.  **API Documentation** 
-4.  **The Developer's Choice:** Explanation of your added feature.
-
----
-Submit your repo link via the [online](https://forms.office.com/e/rGKtfeZCsH) form.
-
-## 🛑 Pre-Submission Checklist
-**WARNING:** Before you submit your solution, you **MUST** pass every item on this list.
-If you miss any of these critical steps, your submission will be **automatically rejected** and you will **NOT** be invited to an interview.
-
-### 1. 📂 Repository & Code
-- [ ] **Public Access:** Is your GitHub repository set to **Public**? (We cannot review private repos).
-- [ ] **Clean Code:** Did you remove unnecessary files (like `node_modules`, `.env` with real keys, or `.DS_Store`)?
-- [ ] **Run Check:** if we clone your repo and run `npm start` (or equivalent), does the server start immediately without crashing?
-
-### 2. 📄 Documentation (Crucial)
-- [ ] **Architecture Diagram:** Did you include a visual Diagram (Flowchart or Sequence Diagram) in the README?
-- [ ] **README Swap:** Did you **DELETE** the original instructions (the problem brief) from this file and replace it with your own documentation?
-- [ ] **API Docs:** Is there a clear list of Endpoints and Example Requests in the README?
-
-
-### 3. 🧹 Git Hygiene
-- [ ] **Commit History:** Does your repo have multiple commits with meaningful messages? (A single "Initial Commit" is a red flag).
+    down   --> active : POST /monitors (re-register)
+```
 
 ---
-**Ready?**
-If you checked all the boxes above, submit your repository link in the application form. Good luck! 🚀
+
+## API Endpoints
+
+| Method | Path | User Story | Description |
+|--------|------|---|---|
+| `POST` | `/monitors` | 1 | Register a new monitor |
+| `GET` | `/monitors` | 1 | List all monitors |
+| `GET` | `/monitors/:id` | 1 | Get a monitor's current status |
+| `POST` | `/monitors/:id/heartbeat` | 2 | Send a heartbeat — reset the timer |
+| `POST` | `/monitors/:id/pause` | Bonus | Pause the monitor |
+| `GET` | `/monitors/:id/history` | Dev Choice | Full event audit log |
