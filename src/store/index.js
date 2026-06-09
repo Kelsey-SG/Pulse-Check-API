@@ -32,11 +32,11 @@ let eventIdSeq = 0;
 
 function logEvent(monitorId, eventType, details = {}) {
   events.push({
-    event_id  : ++eventIdSeq,
-    monitor_id: monitorId,
-    event_type: eventType,
+    event_id : ++eventIdSeq,
+    monitor_id : monitorId,
+    event_type : eventType,
     details,
-    created_at: new Date().toISOString(),
+    created_at : new Date().toISOString(),
   });
 }
 

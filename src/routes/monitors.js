@@ -7,6 +7,7 @@ const router  = express.Router();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Implementation of POST /monitors features:
+
 router.post('/', (req, res) => {
     const { id, timeout, alert_email } = req.body;
   
@@ -20,18 +21,18 @@ router.post('/', (req, res) => {
     if (errors.length > 0)
       return res.status(400).json({ error: 'Validation failed.', details: errors });
   
-    const cleanId    = id.trim();
+    const cleanId = id.trim();
     const cleanEmail = alert_email.trim().toLowerCase();
-    const existing   = store.getMonitor(cleanId);
-    const now        = new Date();
+    const existing = store.getMonitor(cleanId);
+    const now = new Date();
   
     const monitor = {
-      id             : cleanId,
+      id : cleanId,
       timeout_seconds: timeout,
-      alert_email    : cleanEmail,
-      status         : 'active',
-      expires_at     : new Date(now.getTime() + timeout * 1000).toISOString(),
-      created_at     : existing?.created_at ?? now.toISOString(),
+      alert_email : cleanEmail,
+      status : 'active',
+      expires_at : new Date(now.getTime() + timeout * 1000).toISOString(),
+      created_at : existing?.created_at ?? now.toISOString(),
     };
   
     store.setMonitor(monitor);
@@ -43,4 +44,31 @@ router.post('/', (req, res) => {
     });
   });
   
+// Implementation of POST /monitors/:id/heartbeat features:
+
+router.post('/:id/heartbeat', (req, res) => {
+    const { id } = req.params;
+    const monitor = store.getMonitor(id);
+  
+    if (!monitor)
+      return res.status(404).json({ error: `Monitor '${id}' not found.` });
+  
+    if (monitor.status === 'down')
+      return res.status(409).json({
+        error : `Monitor '${id}' is DOWN. Re-register it via POST /monitors to restart.`,
+        status : 'down',
+      });
+  
+    const paused = monitor.status === 'paused';
+    monitor.status = 'active';
+    monitor.expires_at = new Date(Date.now() + monitor.timeout_seconds * 1000).toISOString();
+    store.setMonitor(monitor);
+    store.logEvent(id, paused ? 'unpaused' : 'heartbeat', { previous_status: monitor.status });
+  
+    return res.json({
+      message: paused ? `Monitor '${id}' un-paused. Timer restarted.` 
+      : `Heartbeat received. Timer reset for '${id}'.`, monitor,
+    });
+  });
+
   module.exports = router;
