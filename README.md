@@ -27,8 +27,6 @@ automatically fires an alert.
 
 ## Architecture
 
-## Architecture
-
 ```mermaid
 sequenceDiagram
     participant Device as Remote Device
