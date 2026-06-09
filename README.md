@@ -36,21 +36,32 @@ The system has three parts that work together which are:
 3. **The Watchdog Worker** runs every 5 seconds in the background. It scans all active monitors and fires an alert for any whose timer has expired.
 
 
-### State Diagram
-
+### Flowchart
 ```mermaid
-stateDiagram-v2
-    direction LR
+flowchart TD
+    A([Start]) --> B[POST /monitors]
+    B --> C{Valid input?}
+    C -- No --> D[400 Bad Request]
+    C -- Yes --> E[Store monitor\nstatus = active]
+    E --> F[Timer starts]
 
-    [*]    --> active : POST /monitors (register)
+    F --> G{Heartbeat\nreceived?}
+    G -- Yes --> H{Monitor\nstatus?}
+    H -- active --> I[Reset timer]
+    H -- paused --> J[Unpause +\nReset timer]
+    H -- down --> K[409 Conflict\nRe-register]
+    I --> F
+    J --> F
 
-    active --> active : POST /monitors/:id/heartbeat (timer reset)
-    active --> paused : POST /monitors/:id/pause (timer suspended)
-    active --> down   : Watchdog fires (timer expired)
+    G -- No --> L{Timer\nexpired?}
+    L -- No --> G
+    L -- Yes --> M[ALERT fired\nstatus = down]
 
-    paused --> active : POST /monitors/:id/heartbeat (un-pause + reset)
+    F --> N[POST /monitors/:id/pause]
+    N --> O[status = paused\nTimer cleared]
+    O --> G
 
-    down   --> active : POST /monitors (re-register)
+    M --> P([Device Down])
 ```
 
 ---
@@ -211,5 +222,5 @@ Returns the full event audit log for a monitor in chronological order.
 
 By adding this history functionality to the system, it becomes significantly more useful to the engineers who must respond to those alerts. Instead of being able to understand only the current state of a device, the engineers can now also understand the history of each state that the device has gone through.
 
-**Implementation**
+**Implementation:**
 The endpoint exposes the history of all state changes for a device by specifying the device ID in the URL. The system tracks every state change including created, heartbeat, paused, unpaused, and alert_fired. Each state change is stored in the in-memory store for the system. Finally, the history endpoint can return all of the changes for a specific device and can apply filters to view only certain types of changes (by the event_type parameter) and can also limit the number of changes to be returned (by the limit parameter).
