@@ -26,39 +26,21 @@ router.post('/', (req, res) => {
     const now        = new Date();
   
     const monitor = {
-      id              : cleanId,
-      timeout_seconds : timeout,
-      alert_email     : cleanEmail,
-      status          : 'active',
-      expires_at      : new Date(now.getTime() + timeout * 1000).toISOString(),
-      created_at      : existing?.created_at ?? now.toISOString(),
+      id             : cleanId,
+      timeout_seconds: timeout,
+      alert_email    : cleanEmail,
+      status         : 'active',
+      expires_at     : new Date(now.getTime() + timeout * 1000).toISOString(),
+      created_at     : existing?.created_at ?? now.toISOString(),
     };
   
     store.setMonitor(monitor);
     store.logEvent(cleanId, 'created', { timeout, alert_email: cleanEmail });
   
     return res.status(201).json({
-      message: `Monitor '${cleanId}' registered. Watchdog armed. ⏱️`,
+      message: `Monitor '${cleanId}' registered. Watchdog armed.`,
       monitor,
     });
   });
-
-
-// Utility function to format monitor objects for API responses
-function formatMonitor(m) {
-  const secondsRemaining = m.expires_at
-    ? Math.max(0, Math.round((new Date(m.expires_at) - Date.now()) / 1000))
-    : null;
-
-  return {
-    id               : m.id,
-    timeout_seconds  : m.timeout_seconds,
-    alert_email      : m.alert_email,
-    status           : m.status,
-    expires_at       : m.expires_at ?? null,
-    seconds_remaining: secondsRemaining,
-    created_at       : m.created_at,
-  };
-}
-
-module.exports = router;
+  
+  module.exports = router;
