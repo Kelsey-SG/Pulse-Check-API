@@ -7,9 +7,11 @@ const router  = express.Router();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Implementation of POST /monitors features:
+// Registers a new monitor and arms its countdown timer.
 router.post('/', (req, res) => {
     const {id, timeout, alert_email} = req.body;
-  
+    
+    // Basic validation of input parameters.
     const errors = [];
     if (!id || typeof id !== 'string' || id.trim() === '')
       errors.push('`id` is required and must be a non-empty string.');
@@ -20,6 +22,7 @@ router.post('/', (req, res) => {
     if (errors.length > 0)
       return res.status(400).json({error: 'Validation failed.', details: errors});
   
+    // Normalize inputs.
     const cleanId = id.trim();
     const cleanEmail = alert_email.trim().toLowerCase();
     const existing = store.getMonitor(cleanId);
@@ -45,6 +48,7 @@ router.post('/', (req, res) => {
   
 
   // Implementation of POST /monitors/:id/heartbeat features:
+  // Resets the countdown timer for the specified monitor. If the monitor was paused, it becomes active again.
 router.post('/:id/heartbeat', (req, res) => {
     const {id} = req.params;
     const monitor = store.getMonitor(id);
@@ -72,6 +76,7 @@ router.post('/:id/heartbeat', (req, res) => {
 
   
 // Implementation of POST /monitors/:id/pause features:
+// Pauses the specified monitor, preventing any alerts from firing until a heartbeat is received to resume it.
 router.post('/:id/pause', (req, res) => {
     const {id} = req.params;
     const monitor = store.getMonitor(id);
@@ -96,6 +101,7 @@ router.post('/:id/pause', (req, res) => {
 
 
 // Implementation of GET /monitors/:id/history features:
+// Retrieves the event history for the specified monitor, with optional filtering by event type and limit on number of events returned.
 router.get('/:id/history', (req, res) => {
     const {id} = req.params;
     const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);

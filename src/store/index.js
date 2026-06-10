@@ -7,12 +7,10 @@
  * The events are implemented as: Array<eventObject>
  */
 
-
 const monitors = new Map();
 const events   = [];
 
 // Helper functions for monitors
-
 function getMonitor(id) {
   return monitors.get(id) ?? null;
 }
@@ -27,9 +25,10 @@ function setMonitor(monitor) {
 }
 
 // Helper functions for events
-
 let eventIdSeq = 0;
 
+// Logs an event for a specific monitor. The event object includes a unique event_id, 
+// the monitor_id, event_type, optional details, and a timestamp.
 function logEvent(monitorId, eventType, details = {}) {
   events.push({
     event_id : ++eventIdSeq,
